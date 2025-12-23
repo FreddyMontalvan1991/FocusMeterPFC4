@@ -26,12 +26,15 @@ def ejecutar_modelo():
 
         atentos = 0
         total = len(boxes)
+        print("Total boxes:", total)
         for box in boxes:
             cls_id = int(box.cls[0])
             etiqueta = class_names[cls_id].lower()
+            print("Etiqueta detectada:", etiqueta)
             if etiqueta in ["atento", "attentive"]:
                 atentos += 1
 
         ultimo_nivel = atentos / total if total > 0 else 0
         ultimo_frame = frame
         time.sleep(0.03)
+        print(f'\n\nNivel atencion: {ultimo_nivel}')
