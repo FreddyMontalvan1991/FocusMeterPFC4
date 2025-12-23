@@ -1,37 +1,63 @@
 import streamlit as st
+#import time
 import requests
-import cv2
-import numpy as np
 
 API_URL = "http://localhost:8000"
 
-st.title("Monitoreo en Tiempo Real")
+st.title("📹 Monitoreo en Tiempo Real")
 
-start = st.button("Iniciar monitoreo")
-stop = st.button("Detener monitoreo")
+st.markdown(
+    """
+    Visualización en tiempo real del nivel de atención estudiantil utilizando
+    directamente las predicciones del modelo entrenado.
+    """
+)
+
+# =============================
+# CONTROLES
+# =============================
+start = st.button("▶️ Iniciar monitoreo")
+stop = st.button("⏹️ Detener monitoreo")
 
 frame_window = st.image([])
 semaforo = st.empty()
 
+# =============================
+# SEMÁFORO
+# =============================
 def mostrar_semaforo(nivel):
     if nivel >= 0.7:
-        semaforo.success("Atención Alta")
+        semaforo.success("🟢 Atención Alta")
     elif nivel >= 0.4:
-        semaforo.warning("Atención Media")
+        semaforo.warning("🟡 Atención Media")
     else:
-        semaforo.error("Atención Baja")
+        semaforo.error("🔴 Atención Baja")
 
+# =============================
+# MONITOREO
+# =============================
 if start:
-    while True:
-        nivel = requests.get(f"{API_URL}/estimacion_atencion").json()["estimacion_atencion"]
-        mostrar_semaforo(nivel)
 
-        resp = requests.get(f"{API_URL}/frame")
-        if resp.content:
-            frame = np.frombuffer(resp.content, np.uint8)
-            frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_window.image(frame)
+    while True:
+
+        # Nivel de atención (JSON)
+        nivel_resp = requests.get(f"{API_URL}/estimacion_atencion")
+        nivel = nivel_resp.json()["estimacion_atencion"]
+
+        # Frame (imagen binaria)
+        frame_resp = requests.get(f"{API_URL}/frame")
+
+        if frame_resp.status_code != 200:
+            st.error("No hay frames para mostrar!")
+            break
+
+        mostrar_semaforo(nivel)
+        frame_window.image(frame_resp.content)
+
+        # ⏱️ refresco cada 0.3 segundos
+        #time.sleep(0.3)
 
         if stop:
             break
+
+    st.info("⏹️ Monitoreo detenido")

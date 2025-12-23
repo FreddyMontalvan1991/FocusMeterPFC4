@@ -1,6 +1,6 @@
 import cv2
 from ultralytics import YOLO
-import time
+#import time
 
 ultimo_frame = None
 ultimo_nivel = 0.0
@@ -31,7 +31,7 @@ def ejecutar_modelo():
         atentos = 0
         total = len(boxes)
         print(f"\nTotal cajas:{total}, atentos: {atentos}")
-        time.sleep(1)
+        #time.sleep(1)
 
         for box in boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])

@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from servicio import modelo_atencion
-import cv2
 import threading
+from fastapi.responses import Response
+import cv2
 
 app = FastAPI()
 
@@ -11,14 +12,41 @@ threading.Thread(target=modelo_atencion.ejecutar_modelo, daemon=True).start()
 def ultima_estimacion_atencion():
     return {"estimacion_atencion": modelo_atencion.ultimo_nivel}
 
+
+@app.get("/frame")
+def frame_modelo_atencion():
+    frame = modelo_atencion.ultimo_frame
+
+    if frame is None:
+        return Response(status_code=204)
+
+    # Convertir numpy array → JPEG en memoria
+    success, encoded_image = cv2.imencode(".jpg", frame)
+
+    if not success:
+        return Response(status_code=500)
+
+    return Response(
+        content=encoded_image.tobytes(),
+        media_type="image/jpeg"
+    )
+
+
+
+"""
 @app.get("/frame")
 def frame_modelo_atencion():
     if modelo_atencion.ultimo_frame is None:
         return None
-    return modelo_atencion.ultimo_frame
+    return {"frame": modelo_atencion.ultimo_frame}
 
 
-"""from fastapi import FastAPI
+
+
+
+
+
+from fastapi import FastAPI
 from servicio import modelo_atencion
 import cv2
 import threading
