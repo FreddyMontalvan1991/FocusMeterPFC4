@@ -14,8 +14,21 @@ st.markdown(
 # =============================
 # CONFIGURACIÓN
 # =============================
-MODEL_PATH = "models/best.pt"
-CAMERA_INDEX = 0
+MODEL_PATH = "app/extras/best.pt"
+
+# Definimos una función para encontrar la cámara disponible
+def get_camera():
+    # Intenta primero con el índice 1 (comúnmente la webcam externa)
+    # y luego con el 0 (comúnmente la integrada)
+    for index in [1, 0]:
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            # Probamos leer un frame para asegurar que realmente funciona
+            ret, _ = cap.read()
+            if ret:
+                return cap, index
+            cap.release()
+    return None, None
 
 # =============================
 # CARGAR MODELO
@@ -25,7 +38,7 @@ def load_model():
     return YOLO(MODEL_PATH)
 
 model = load_model()
-class_names = model.names  # ← CLASES DEL MODELO
+class_names = model.names
 
 # =============================
 # CONTROLES
@@ -41,25 +54,30 @@ semaforo = st.empty()
 # =============================
 def mostrar_semaforo(nivel):
     if nivel >= 0.7:
-        semaforo.success("🟢 Atención Alta")
+        semaforo.success(f"🟢 Atención Alta ({nivel:.2%})")
     elif nivel >= 0.4:
-        semaforo.warning("🟡 Atención Media")
+        semaforo.warning(f"🟡 Atención Media ({nivel:.2%})")
     else:
-        semaforo.error("🔴 Atención Baja")
+        semaforo.error(f"🔴 Atención Baja ({nivel:.2%})")
 
 # =============================
 # MONITOREO
 # =============================
 if start:
-    cap = cv2.VideoCapture(CAMERA_INDEX)
+    # Intentar obtener la cámara automáticamente
+    cap, selected_index = get_camera()
 
-    if not cap.isOpened():
-        st.error("❌ No se pudo acceder a la cámara")
+    if cap is None:
+        st.error("❌ No se detectó ninguna cámara (webcam o integrada)")
         st.stop()
+    else:
+        cam_type = "Externa (USB)" if selected_index == 1 else "Integrada"
+        st.toast(f"✅ Usando cámara {cam_type}")
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
+            st.warning("⚠️ Se perdió la conexión con la cámara")
             break
 
         # ===== INFERENCIA YOLO =====
@@ -74,9 +92,9 @@ if start:
             cls_id = int(box.cls[0])
             conf = float(box.conf[0])
 
-            etiqueta = class_names[cls_id]  # ← DEL MODELO
+            etiqueta = class_names[cls_id]
 
-            # Color según clase (AJUSTA nombres si es necesario)
+            # Color según clase
             if etiqueta.lower() in ["atento", "attentive"]:
                 color = (0, 255, 0)
                 atentos += 1
@@ -95,15 +113,15 @@ if start:
                 2
             )
 
-        # ===== NIVEL DE ATENCIÓN (MODELO) =====
+        # ===== NIVEL DE ATENCIÓN =====
         nivel_atencion = atentos / total if total > 0 else 0
-
         mostrar_semaforo(nivel_atencion)
 
         # ===== MOSTRAR VIDEO =====
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_window.image(frame_rgb)
 
+        # Usamos una clave de sesión o el botón stop para salir
         if stop:
             break
 
