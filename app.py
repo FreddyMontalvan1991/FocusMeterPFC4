@@ -4,31 +4,10 @@ from ultralytics import YOLO
 
 st.title("📹 Monitoreo en Tiempo Real")
 
-st.markdown(
-    """
-    Visualización en tiempo real del nivel de atención estudiantil utilizando
-    directamente las predicciones del modelo entrenado.
-    """
-)
-
 # =============================
 # CONFIGURACIÓN
 # =============================
 MODEL_PATH = "app/extras/best.pt"
-
-# Definimos una función para encontrar la cámara disponible
-def get_camera():
-    # Intenta primero con el índice 1 (comúnmente la webcam externa)
-    # y luego con el 0 (comúnmente la integrada)
-    for index in [1, 0]:
-        cap = cv2.VideoCapture(index)
-        if cap.isOpened():
-            # Probamos leer un frame para asegurar que realmente funciona
-            ret, _ = cap.read()
-            if ret:
-                return cap, index
-            cap.release()
-    return None, None
 
 # =============================
 # CARGAR MODELO
@@ -50,40 +29,47 @@ frame_window = st.image([])
 semaforo = st.empty()
 
 # =============================
-# SEMÁFORO
+# LÓGICA DE SELECCIÓN AUTOMÁTICA
 # =============================
-def mostrar_semaforo(nivel):
-    if nivel >= 0.7:
-        semaforo.success(f"🟢 Atención Alta ({nivel:.2%})")
-    elif nivel >= 0.4:
-        semaforo.warning(f"🟡 Atención Media ({nivel:.2%})")
-    else:
-        semaforo.error(f"🔴 Atención Baja ({nivel:.2%})")
+def iniciar_camara():
+    # 1. Intentar con la WebCam externa (índice 1)
+    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW) 
+    if cap is not None and cap.isOpened():
+        ret, _ = cap.read()
+        if ret:
+            return cap, "Externa (USB)"
+        cap.release()
+
+    # 2. Si falla la externa, intentar con la integrada (índice 0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    if cap is not None and cap.isOpened():
+        ret, _ = cap.read()
+        if ret:
+            return cap, "Integrada"
+        cap.release()
+
+    return None, None
 
 # =============================
 # MONITOREO
 # =============================
 if start:
-    # Intentar obtener la cámara automáticamente
-    cap, selected_index = get_camera()
+    cap, tipo_camara = iniciar_camara()
 
     if cap is None:
-        st.error("❌ No se detectó ninguna cámara (webcam o integrada)")
+        st.error("❌ No se detectó ninguna cámara disponible.")
         st.stop()
-    else:
-        cam_type = "Externa (USB)" if selected_index == 1 else "Integrada"
-        st.toast(f"✅ Usando cámara {cam_type}")
+    
+    st.toast(f"✅ Usando cámara {tipo_camara}")
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            st.warning("⚠️ Se perdió la conexión con la cámara")
             break
 
-        # ===== INFERENCIA YOLO =====
-        results = model(frame, conf=0.5)
+        # Inferencia
+        results = model(frame, conf=0.5, verbose=False)
         boxes = results[0].boxes
-
         atentos = 0
         total = len(boxes)
 
@@ -91,37 +77,24 @@ if start:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             cls_id = int(box.cls[0])
             conf = float(box.conf[0])
-
             etiqueta = class_names[cls_id]
 
-            # Color según clase
-            if etiqueta.lower() in ["atento", "attentive"]:
-                color = (0, 255, 0)
-                atentos += 1
-            else:
-                color = (0, 0, 255)
+            color = (0, 255, 0) if etiqueta.lower() in ["atento", "attentive"] else (0, 0, 255)
+            if color == (0, 255, 0): atentos += 1
 
-            # ===== DIBUJAR CUADRO =====
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(
-                frame,
-                f"{etiqueta} ({conf:.2f})",
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                color,
-                2
-            )
+            cv2.putText(frame, f"{etiqueta}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        # ===== NIVEL DE ATENCIÓN =====
-        nivel_atencion = atentos / total if total > 0 else 0
-        mostrar_semaforo(nivel_atencion)
+        # Semáforo
+        nivel = atentos / total if total > 0 else 0
+        if nivel >= 0.7: semaforo.success(f"🟢 Atención Alta: {nivel:.0%}")
+        elif nivel >= 0.4: semaforo.warning(f"🟡 Atención Media: {nivel:.0%}")
+        else: semaforo.error(f"🔴 Atención Baja: {nivel:.0%}")
 
-        # ===== MOSTRAR VIDEO =====
+        # Mostrar imagen
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_window.image(frame_rgb)
 
-        # Usamos una clave de sesión o el botón stop para salir
         if stop:
             break
 
