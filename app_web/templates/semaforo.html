@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Semáforo</h1>
+
+<img src="/video" width="640">
+
+<div id="nivel"></div>
+
+<script>
+setInterval(async () => {
+    const r = await fetch("/estado");
+    const d = await r.json();
+    document.getElementById("nivel").innerText =
+        "Atención: " + Math.round(d.nivel * 100) + "%";
+}, 1000);
+</script>
+
+{% endblock %}
